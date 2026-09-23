@@ -17,6 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
   title: "UTC Fire Station — Emergency Lookup",
   description: "Internal emergency-response lookup tool for UTC Fire Station, KEPZ",
   robots: { index: false, follow: false },

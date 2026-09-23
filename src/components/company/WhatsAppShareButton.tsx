@@ -9,13 +9,16 @@ import { Button } from "@/components/ui/button";
 
 export function WhatsAppShareButton({ company }: { company: CompanyDTO }) {
   const [isSharing, setIsSharing] = useState(false);
-  const message = formatCompanyMessage(company);
+  const [origin, setOrigin] = useState("");
 
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
+    setOrigin(window.location.origin);
   }, []);
+
+  const message = formatCompanyMessage(company, origin);
 
   async function handleNativeShare() {
     setIsSharing(true);
@@ -63,14 +66,14 @@ export function WhatsAppShareButton({ company }: { company: CompanyDTO }) {
   if (supportsNativeShare) {
     return (
       <div className="space-y-2">
-        <Button type="button" className="w-full" onClick={handleNativeShare} disabled={isSharing}>
+        <Button type="button" className="w-full cursor-pointer" onClick={handleNativeShare} disabled={isSharing}>
           <MessageCircle className="mr-2 size-4" />
           {isSharing ? "Opening share sheet…" : "Share to WhatsApp"}
         </Button>
         <button
           type="button"
           onClick={handleCopyDetails}
-          className="w-full text-center text-xs text-muted-foreground underline underline-offset-2"
+          className="w-full cursor-pointer text-center text-xs text-muted-foreground underline underline-offset-2"
         >
           Or copy details manually
         </button>

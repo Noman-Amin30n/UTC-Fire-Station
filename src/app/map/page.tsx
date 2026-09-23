@@ -26,21 +26,17 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     ? `View the location of ${company.name} on the map.`
     : "View this company location on the map.";
 
+  const ogImage = company?.imageUrl
+    ? { url: company.imageUrl, width: 800, height: 800, alt: company.name }
+    : { url: "/map/opengraph-image.jpg", width: 1024, height: 1024, alt: "Company Location Map" };
+
   return {
     title,
     description,
     openGraph: {
       title,
       description,
-      // Absolute URL so WhatsApp/Telegram scrapers can fetch this image
-      images: [
-        {
-          url: "/map/opengraph-image.jpg",
-          width: 1024,
-          height: 1024,
-          alt: "Company Location Map",
-        },
-      ],
+      images: [ogImage],
     },
   };
 }

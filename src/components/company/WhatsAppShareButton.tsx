@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { MessageCircle, Copy, ImageDown } from "lucide-react";
+import { MessageCircle, Copy, MapPin } from "lucide-react";
 import type { CompanyDTO } from "@/types/company";
-import { formatCompanyMessage, buildWhatsAppUrl, fetchImageAsFile, canShareFiles } from "@/lib/whatsapp";
+import { formatCompanyMessage, buildWhatsAppUrl } from "@/lib/whatsapp";
 import { Button } from "@/components/ui/button";
 
 export function WhatsAppShareButton({ company }: { company: CompanyDTO }) {
@@ -20,17 +20,13 @@ export function WhatsAppShareButton({ company }: { company: CompanyDTO }) {
   async function handleNativeShare() {
     setIsSharing(true);
     try {
-      const imageFile = await fetchImageAsFile(company.imageUrl, `${company.name}-map.jpg`);
-
-      if (canShareFiles([imageFile])) {
-        await navigator.share({ text: message, files: [imageFile] });
-      } else if (navigator.share) {
+      if (navigator.share) {
         await navigator.share({ text: message });
       } else {
         throw new Error("Web Share API unavailable");
       }
     } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") return; // user cancelled the share sheet
+      if (err instanceof Error && err.name === "AbortError") return; // user cancelled
       toast.error("Native sharing isn't available on this browser — use Copy + Open WhatsApp below");
     } finally {
       setIsSharing(false);
@@ -50,8 +46,10 @@ export function WhatsAppShareButton({ company }: { company: CompanyDTO }) {
     window.open(buildWhatsAppUrl(message), "_blank", "noopener,noreferrer");
   }
 
-  function handleOpenImage() {
-    window.open(company.imageUrl, "_blank", "noopener,noreferrer");
+  function handleOpenMap() {
+    if (company.googleMapsUrl) {
+      window.open(company.googleMapsUrl, "_blank", "noopener,noreferrer");
+    }
   }
 
   const supportsNativeShare = isMounted && typeof navigator !== "undefined" && !!navigator.share;
@@ -81,7 +79,7 @@ export function WhatsAppShareButton({ company }: { company: CompanyDTO }) {
   }
 
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className={`grid gap-2 ${company.googleMapsUrl ? "grid-cols-3" : "grid-cols-2"}`}>
       <Button type="button" variant="outline" onClick={handleCopyDetails}>
         <Copy className="mr-2 size-4" />
         Copy details
@@ -90,10 +88,12 @@ export function WhatsAppShareButton({ company }: { company: CompanyDTO }) {
         <MessageCircle className="mr-2 size-4" />
         Open WhatsApp
       </Button>
-      <Button type="button" variant="outline" onClick={handleOpenImage}>
-        <ImageDown className="mr-2 size-4" />
-        Open map
-      </Button>
+      {company.googleMapsUrl && (
+        <Button type="button" variant="outline" onClick={handleOpenMap}>
+          <MapPin className="mr-2 size-4" />
+          Open map
+        </Button>
+      )}
     </div>
   );
 }

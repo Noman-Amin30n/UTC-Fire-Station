@@ -27,6 +27,7 @@ function parseCompanyFormData(formData: FormData) {
     contactPerson: formData.get("contactPerson"),
     companyCode: formData.get("companyCode"),
     notes: formData.get("notes"),
+    googleMapsUrl: formData.get("googleMapsUrl"),
   });
 }
 
@@ -56,29 +57,35 @@ export async function createCompany(
   }
 
   const imageFile = formData.get("image");
-  if (!(imageFile instanceof File) || imageFile.size === 0) {
-    return { error: "A map image is required" };
+  let imageUrl = "";
+  let imagePublicId = "";
+
+  if (imageFile instanceof File && imageFile.size > 0) {
+    const imageError = validateImageFile(imageFile);
+    if (imageError) return { error: imageError };
+    await connectDB();
+    const uploaded = await uploadCompanyImage(imageFile);
+    imageUrl = uploaded.url;
+    imagePublicId = uploaded.publicId;
   }
-  const imageError = validateImageFile(imageFile);
-  if (imageError) return { error: imageError };
 
   await connectDB();
-  const { url, publicId } = await uploadCompanyImage(imageFile);
 
   try {
     await Company.create({
       name: parsed.data.name,
       address: parsed.data.address,
-      imageUrl: url,
-      imagePublicId: publicId,
+      imageUrl,
+      imagePublicId,
       phone: toOptional(parsed.data.phone),
       email: toOptional(parsed.data.email),
       contactPerson: toOptional(parsed.data.contactPerson),
       companyCode: toOptional(parsed.data.companyCode),
       notes: toOptional(parsed.data.notes),
+      googleMapsUrl: toOptional(parsed.data.googleMapsUrl),
     });
   } catch (err) {
-    await deleteCompanyImage(publicId).catch(() => {});
+    if (imagePublicId) await deleteCompanyImage(imagePublicId).catch(() => {});
     if (isDuplicateKeyError(err)) {
       return { error: "A company with this name or code already exists" };
     }
@@ -111,7 +118,7 @@ export async function updateCompany(
   if (imageFile instanceof File && imageFile.size > 0) {
     const imageError = validateImageFile(imageFile);
     if (imageError) return { error: imageError };
-    const { url, publicId } = await replaceCompanyImage(imageFile, existing.imagePublicId);
+    const { url, publicId } = await replaceCompanyImage(imageFile, existing.imagePublicId ?? "");
     imageUpdate = { imageUrl: url, imagePublicId: publicId };
   }
 
@@ -123,6 +130,7 @@ export async function updateCompany(
     contactPerson: toOptional(parsed.data.contactPerson),
     companyCode: toOptional(parsed.data.companyCode),
     notes: toOptional(parsed.data.notes),
+    googleMapsUrl: toOptional(parsed.data.googleMapsUrl),
     ...(imageUpdate ?? {}),
   });
 
@@ -146,7 +154,7 @@ export async function deleteCompany(id: string, _formData: FormData): Promise<vo
   const existing = await Company.findById(id);
   if (!existing) return;
 
-  await deleteCompanyImage(existing.imagePublicId).catch(() => {
+  await deleteCompanyImage(existing.imagePublicId ?? "").catch(() => {
     console.error(`Failed to delete Cloudinary asset for company ${id}`);
   });
   await existing.deleteOne();

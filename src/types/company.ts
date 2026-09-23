@@ -5,6 +5,7 @@ export type CompanyDTO = {
   address: string;
   imageUrl: string;
   imagePublicId: string;
+  googleMapsUrl?: string;
   phone?: string;
   email?: string;
   contactPerson?: string;
@@ -22,6 +23,7 @@ export function toCompanyDTO(doc: Record<string, unknown>): CompanyDTO {
     address: doc.address as string,
     imageUrl: doc.imageUrl as string,
     imagePublicId: doc.imagePublicId as string,
+    googleMapsUrl: doc.googleMapsUrl as string | undefined,
     phone: doc.phone as string | undefined,
     email: doc.email as string | undefined,
     contactPerson: doc.contactPerson as string | undefined,

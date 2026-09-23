@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import type { CompanyDTO } from "@/types/company";
 import { normalizeSearchName } from "@/lib/utils";
@@ -11,12 +12,103 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from "@/components/ui/accordion";
-import { Search, MapPin, Info, PhoneCall } from "lucide-react";
+import { Search, MapPin, Info, X, ZoomIn } from "lucide-react";
 import { WhatsAppShareButton } from "@/components/company/WhatsAppShareButton";
-import { DraggableImage } from "@/components/company/DraggableImage";
+import { EmbeddedMap } from "@/components/company/EmbeddedMap";
 
+// ---------------------------------------------------------------------------
+// Lightbox
+// ---------------------------------------------------------------------------
+function Lightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={alt}
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0,0,0,0.85)",
+        backdropFilter: "blur(6px)",
+        animation: "lbFadeIn 0.2s ease",
+      }}
+    >
+      <button
+        onClick={onClose}
+        aria-label="Close image"
+        style={{
+          position: "absolute",
+          top: "1rem",
+          right: "1rem",
+          background: "rgba(255,255,255,0.12)",
+          border: "1px solid rgba(255,255,255,0.2)",
+          borderRadius: "50%",
+          width: "2.5rem",
+          height: "2.5rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#fff",
+          cursor: "pointer",
+          transition: "background 0.15s",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.25)")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.12)")}
+      >
+        <X size={18} />
+      </button>
+
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: "90vw",
+          maxHeight: "90vh",
+          borderRadius: "0.75rem",
+          overflow: "hidden",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.6)",
+          animation: "lbScaleIn 0.2s ease",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt={alt}
+          style={{ display: "block", maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain" }}
+        />
+      </div>
+
+      <style>{`
+        @keyframes lbFadeIn  { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes lbScaleIn { from { transform: scale(0.92); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+      `}</style>
+    </div>,
+    document.body,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main list
+// ---------------------------------------------------------------------------
 export function CompanyAccordionList({ companies }: { companies: CompanyDTO[] }) {
   const [filter, setFilter] = useState("");
+  const [lightboxSrc, setLightboxSrc] = useState<{ src: string; alt: string } | null>(null);
+  const closeLightbox = useCallback(() => setLightboxSrc(null), []);
 
   const filtered = useMemo(() => {
     const normalized = normalizeSearchName(filter);
@@ -51,8 +143,8 @@ export function CompanyAccordionList({ companies }: { companies: CompanyDTO[] })
       ) : (
         <Accordion type="single" collapsible className="w-full space-y-4">
           {filtered.map((company) => (
-            <AccordionItem 
-              key={company._id} 
+            <AccordionItem
+              key={company._id}
               value={company._id}
               className="border border-border/40 rounded-xl bg-card overflow-hidden shadow-sm data-[state=open]:border-primary/50 data-[state=open]:ring-1 data-[state=open]:ring-primary/20 transition-all"
             >
@@ -68,10 +160,40 @@ export function CompanyAccordionList({ companies }: { companies: CompanyDTO[] })
               <AccordionContent className="px-6 pb-6 pt-2">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                   <div className="space-y-4">
-                    <DraggableImage src={company.imageUrl} alt={`Map to ${company.name}`} />
+                    {company.googleMapsUrl ? (
+                      <EmbeddedMap
+                        googleMapsUrl={company.googleMapsUrl}
+                        title={`Map to ${company.name}`}
+                      />
+                    ) : (
+                      <div className="flex aspect-video w-full items-center justify-center rounded-lg border border-dashed border-border bg-muted text-sm text-muted-foreground">
+                        No map available
+                      </div>
+                    )}
                   </div>
-                  
+
                   <div className="space-y-6 flex flex-col h-full">
+                    {company.imageUrl && (
+                      <button
+                        type="button"
+                        aria-label={`View full image of ${company.name}`}
+                        onClick={() => setLightboxSrc({ src: company.imageUrl, alt: `${company.name} image` })}
+                        className="group/img relative overflow-hidden rounded-lg border border-border/40 bg-muted transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-zoom-in"
+                        style={{ width: "150px" }}
+                      >
+                        <Image
+                          src={company.imageUrl}
+                          alt={`${company.name} image`}
+                          width={150}
+                          height={150}
+                          className="w-full object-cover transition-transform duration-300 group-hover/img:scale-105"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/img:bg-black/30 transition-colors duration-200">
+                          <ZoomIn className="h-6 w-6 text-white opacity-0 group-hover/img:opacity-100 transition-opacity duration-200 drop-shadow-lg" />
+                        </div>
+                      </button>
+                    )}
+
                     <div className="space-y-1">
                       <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center">
                         <MapPin className="mr-2 h-4 w-4" />
@@ -101,6 +223,10 @@ export function CompanyAccordionList({ companies }: { companies: CompanyDTO[] })
             </AccordionItem>
           ))}
         </Accordion>
+      )}
+
+      {lightboxSrc && (
+        <Lightbox src={lightboxSrc.src} alt={lightboxSrc.alt} onClose={closeLightbox} />
       )}
     </div>
   );

@@ -27,7 +27,6 @@ export function CompanyForm({ action, defaultValues, existingImageUrl, submitLab
   const {
     register,
     handleSubmit,
-    setError,
     formState: { errors },
   } = useForm<CompanyFormValues>({ resolver: zodResolver(companyFormSchema), defaultValues });
 
@@ -38,11 +37,6 @@ export function CompanyForm({ action, defaultValues, existingImageUrl, submitLab
   }
 
   function onSubmit(values: CompanyFormValues) {
-    if (!existingImageUrl && !imageFile) {
-      setError("root", { message: "A map image is required" });
-      return;
-    }
-
     setServerError(null);
     const formData = new FormData();
     formData.set("name", values.name);
@@ -52,6 +46,7 @@ export function CompanyForm({ action, defaultValues, existingImageUrl, submitLab
     formData.set("contactPerson", values.contactPerson ?? "");
     formData.set("companyCode", values.companyCode ?? "");
     formData.set("notes", values.notes ?? "");
+    formData.set("googleMapsUrl", values.googleMapsUrl ?? "");
     if (imageFile) formData.set("image", imageFile);
 
     startTransition(async () => {
@@ -107,19 +102,41 @@ export function CompanyForm({ action, defaultValues, existingImageUrl, submitLab
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="image">Map image {existingImageUrl ? "(leave empty to keep current)" : ""}</Label>
+        <Label htmlFor="image">
+          Company image{" "}
+          <span className="text-xs text-muted-foreground font-normal">
+            {existingImageUrl ? "(leave empty to keep current)" : "(optional)"}
+          </span>
+        </Label>
         <Input id="image" type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageChange} />
         {preview && (
           <Image
             src={preview}
-            alt="Map preview"
+            alt="Company image preview"
             width={320}
             height={200}
             className="rounded-md border border-border object-cover"
             unoptimized
           />
         )}
-        {errors.root && <p className="text-sm text-destructive">{errors.root.message}</p>}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="googleMapsUrl">
+          Google Maps embed URL{" "}
+          <span className="text-xs text-muted-foreground font-normal">
+            (from Maps → Share → Embed a map → copy src URL)
+          </span>
+        </Label>
+        <Input
+          id="googleMapsUrl"
+          type="url"
+          placeholder="https://www.google.com/maps/embed?pb=..."
+          {...register("googleMapsUrl")}
+        />
+        {errors.googleMapsUrl && (
+          <p className="text-sm text-destructive">{errors.googleMapsUrl.message}</p>
+        )}
       </div>
 
       {serverError && <p className="text-sm text-destructive">{serverError}</p>}

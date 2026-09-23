@@ -6,6 +6,7 @@ export function formatCompanyMessage(company: CompanyDTO): string {
     company.address,
     company.phone ? `Phone: ${company.phone}` : null,
     company.notes ? `Notes: ${company.notes}` : null,
+    company.googleMapsUrl ? `📍 Map: ${company.googleMapsUrl}` : null,
   ].filter(Boolean);
 
   return lines.join("\n");
@@ -13,14 +14,4 @@ export function formatCompanyMessage(company: CompanyDTO): string {
 
 export function buildWhatsAppUrl(message: string): string {
   return `https://wa.me/?text=${encodeURIComponent(message)}`;
-}
-
-export async function fetchImageAsFile(imageUrl: string, filename: string): Promise<File> {
-  const res = await fetch(imageUrl);
-  const blob = await res.blob();
-  return new File([blob], filename, { type: blob.type || "image/jpeg" });
-}
-
-export function canShareFiles(files: File[]): boolean {
-  return typeof navigator !== "undefined" && "canShare" in navigator && navigator.canShare?.({ files });
 }

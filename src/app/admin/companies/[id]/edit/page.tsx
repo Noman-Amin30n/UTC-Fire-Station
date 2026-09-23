@@ -25,6 +25,7 @@ export default async function EditCompanyPage({ params }: { params: Promise<{ id
           contactPerson: company.contactPerson ?? "",
           companyCode: company.companyCode ?? "",
           notes: company.notes ?? "",
+          googleMapsUrl: company.googleMapsUrl ?? "",
         }}
       />
     </div>

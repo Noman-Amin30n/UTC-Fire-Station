@@ -64,7 +64,7 @@ export function CompanyAdminTable({ companies }: { companies: CompanyDTO[] }) {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Delete {company.name}?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This permanently removes the company record and its map image. This cannot be undone.
+                        This permanently removes the company record and its company image. This cannot be undone.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

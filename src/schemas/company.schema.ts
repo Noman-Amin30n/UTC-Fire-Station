@@ -8,6 +8,7 @@ export const companyFormSchema = z.object({
   contactPerson: z.string().trim().max(200).optional().or(z.literal("")),
   companyCode: z.string().trim().max(50).optional().or(z.literal("")),
   notes: z.string().trim().max(2000).optional().or(z.literal("")),
+  googleMapsUrl: z.string().trim().url("Must be a valid URL").optional().or(z.literal("")),
 });
 
 export type CompanyFormValues = z.infer<typeof companyFormSchema>;

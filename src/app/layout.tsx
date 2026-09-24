@@ -4,8 +4,6 @@ import "./globals.css";
 import { env } from "@/env";
 import { Toaster } from "@/components/ui/sonner";
 import { SiteHeader } from "@/components/layout/SiteHeader";
-import { ServiceWorkerRegistration } from "@/components/serviceWorkerRegistration";
-
 void env;
 
 const geistSans = Geist({
@@ -38,7 +36,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased flex min-h-[100dvh] flex-col`}>
-        <ServiceWorkerRegistration />
         <SiteHeader />
         <div className="flex-1">
           {children}

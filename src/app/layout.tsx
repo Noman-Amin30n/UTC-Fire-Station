@@ -1,9 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { env } from "@/env";
 import { Toaster } from "@/components/ui/sonner";
 import { SiteHeader } from "@/components/layout/SiteHeader";
+import { ServiceWorkerRegistration } from "@/components/serviceWorkerRegistration";
+
 void env;
 
 const geistSans = Geist({
@@ -21,6 +23,13 @@ export const metadata: Metadata = {
   title: "UTC Fire Station — Emergency Lookup",
   description: "Internal emergency-response lookup tool for UTC Fire Station, KEPZ",
   robots: { index: false, follow: false },
+  applicationName: "UTC Emergency Dispatch",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#ffffff",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -29,6 +38,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased flex min-h-[100dvh] flex-col`}>
+        <ServiceWorkerRegistration />
         <SiteHeader />
         <div className="flex-1">
           {children}

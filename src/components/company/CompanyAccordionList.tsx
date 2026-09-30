@@ -15,6 +15,7 @@ import {
 import { Search, MapPin, Info, X, ZoomIn } from "lucide-react";
 import { WhatsAppShareButton } from "@/components/company/WhatsAppShareButton";
 import { EmbeddedMap } from "@/components/company/EmbeddedMap";
+import { Pagination } from "@/components/ui/pagination";
 
 // ---------------------------------------------------------------------------
 // Lightbox
@@ -106,7 +107,9 @@ function Lightbox({ src, alt, onClose }: { src: string; alt: string; onClose: ()
 // Main list
 // ---------------------------------------------------------------------------
 export function CompanyAccordionList({ companies }: { companies: CompanyDTO[] }) {
+  const ITEMS_PER_PAGE = 8;
   const [filter, setFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [lightboxSrc, setLightboxSrc] = useState<{ src: string; alt: string } | null>(null);
   const closeLightbox = useCallback(() => setLightboxSrc(null), []);
 
@@ -116,8 +119,34 @@ export function CompanyAccordionList({ companies }: { companies: CompanyDTO[] })
     return companies.filter((c) => c.searchName.includes(normalized));
   }, [filter, companies]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+
+  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilter(e.target.value);
+    setCurrentPage(1);
+  };
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedCompanies = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filtered.slice(start, start + ITEMS_PER_PAGE);
+  }, [filtered, currentPage]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    const container = document.getElementById("companies-accordion-list");
+    if (container) {
+      container.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-8">
+    <div id="companies-accordion-list" className="mx-auto w-full max-w-4xl space-y-8 scroll-mt-24">
       <div className="relative group">
         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
           <Search className="h-5 w-5" />
@@ -125,7 +154,7 @@ export function CompanyAccordionList({ companies }: { companies: CompanyDTO[] })
         <Input
           placeholder="Filter companies by name or address..."
           value={filter}
-          onChange={(e) => setFilter(e.target.value)}
+          onChange={handleFilterChange}
           className="h-14 pl-12 text-lg rounded-xl border-border/50 bg-card/50 backdrop-blur-sm shadow-sm transition-all focus:border-primary focus:ring-4 focus:ring-primary/20"
           aria-label="Filter companies"
         />
@@ -141,8 +170,9 @@ export function CompanyAccordionList({ companies }: { companies: CompanyDTO[] })
           <p className="text-lg text-muted-foreground">No companies match &ldquo;<span className="text-foreground">{filter}</span>&rdquo;</p>
         </div>
       ) : (
-        <Accordion type="single" collapsible className="w-full space-y-4">
-          {filtered.map((company) => (
+        <div className="space-y-6">
+          <Accordion type="single" collapsible className="w-full space-y-4">
+            {paginatedCompanies.map((company) => (
             <AccordionItem
               key={company._id}
               value={company._id}
@@ -221,8 +251,19 @@ export function CompanyAccordionList({ companies }: { companies: CompanyDTO[] })
                 </div>
               </AccordionContent>
             </AccordionItem>
-          ))}
-        </Accordion>
+            ))}
+          </Accordion>
+
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+            totalItems={filtered.length}
+            pageSize={ITEMS_PER_PAGE}
+            itemName="companies"
+            className="pt-2 border-t border-border/40"
+          />
+        </div>
       )}
 
       {lightboxSrc && (

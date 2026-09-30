@@ -6,7 +6,9 @@ import Link from "next/link";
 import type { CompanyDTO } from "@/types/company";
 import { Input } from "@/components/ui/input";
 import { CompanyResultCard } from "@/components/company/CompanyResultCard";
-import { Search, Loader2 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Search, Loader2, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type SearchStatus = "idle" | "loading" | "done" | "error";
@@ -39,6 +41,12 @@ export function CompanySearchInput({ totalCompanies }: { totalCompanies: number 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const value = e.target.value;
     setQuery(value);
+    if (value.trim().length >= 2) {
+      setStatus("loading");
+    } else {
+      setStatus("idle");
+      setResults([]);
+    }
     runSearch(value);
   }
 
@@ -80,7 +88,7 @@ export function CompanySearchInput({ totalCompanies }: { totalCompanies: number 
           onChange={handleChange}
           placeholder="Enter company name or sector..."
           autoFocus
-          className="h-16 pl-14 text-xl rounded-xl border-border/50 bg-background/50 backdrop-blur-sm shadow-sm transition-all focus:border-primary focus:ring-4 focus:ring-primary/20 placeholder:text-muted-foreground/60"
+          className="h-16 pl-14 text-xl rounded-xl border-border/50 bg-background/50 shadow-sm transition-all focus:border-primary focus:ring-4 focus:ring-primary/20 placeholder:text-muted-foreground/60"
           aria-label="Company search"
         />
         <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
@@ -91,6 +99,50 @@ export function CompanySearchInput({ totalCompanies }: { totalCompanies: number 
       </div>
 
       <div aria-live="polite" className="space-y-6 min-h-[300px]">
+        {status === "loading" && (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-4">
+            <Card className="border-border/60 overflow-hidden shadow-sm bg-card/50">
+              <CardContent className="space-y-5 pt-6">
+                <div className="space-y-2">
+                  <Skeleton className="h-8 w-2/5 min-w-[200px] rounded-lg" />
+                  <Skeleton className="h-5 w-3/5 min-w-[250px] rounded-md" />
+                </div>
+
+                <div className="relative aspect-video w-full rounded-lg overflow-hidden border border-border/40 bg-muted/40 flex flex-col items-center justify-center">
+                  <Skeleton className="absolute inset-0 w-full h-full rounded-lg" />
+                  <div className="relative z-10 flex flex-col items-center justify-center text-muted-foreground/60">
+                    <MapPin className="h-8 w-8 animate-bounce opacity-40 mb-1" />
+                    <span className="text-xs font-medium tracking-wider uppercase">Loading location details...</span>
+                  </div>
+                </div>
+
+                <Skeleton className="h-12 w-full rounded-md" />
+                <Skeleton className="h-10 w-full rounded-md" />
+              </CardContent>
+            </Card>
+
+            <div className="space-y-2 pt-2">
+              <Skeleton className="h-3 w-36 rounded" />
+              <div className="grid gap-2">
+                <div className="h-16 w-full rounded-lg border border-border/40 bg-card/40 p-4 flex items-center justify-between">
+                  <div className="space-y-2 w-3/4">
+                    <Skeleton className="h-4 w-1/3 rounded" />
+                    <Skeleton className="h-3 w-1/2 rounded" />
+                  </div>
+                  <Skeleton className="h-4 w-4 rounded-full" />
+                </div>
+                <div className="h-16 w-full rounded-lg border border-border/40 bg-card/40 p-4 flex items-center justify-between">
+                  <div className="space-y-2 w-3/4">
+                    <Skeleton className="h-4 w-2/5 rounded" />
+                    <Skeleton className="h-3 w-3/5 rounded" />
+                  </div>
+                  <Skeleton className="h-4 w-4 rounded-full" />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {status === "idle" && query.trim().length === 0 && (
           <div className="flex flex-col items-center justify-center pt-12 text-center opacity-70">
             <p className="text-lg text-muted-foreground">
@@ -124,7 +176,7 @@ export function CompanySearchInput({ totalCompanies }: { totalCompanies: number 
           </div>
         )}
 
-        {best && (
+        {status === "done" && best && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4">
             <CompanyResultCard company={best} />
             {others.length > 0 && (

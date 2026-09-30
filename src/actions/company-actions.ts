@@ -40,6 +40,7 @@ function isDuplicateKeyError(err: unknown): boolean {
 }
 
 function revalidateCompanyPages() {
+  revalidatePath("/admin");
   revalidatePath("/admin/companies");
   revalidatePath("/companies");
   revalidatePath("/");

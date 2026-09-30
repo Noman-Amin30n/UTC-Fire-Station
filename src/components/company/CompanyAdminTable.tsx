@@ -98,7 +98,7 @@ export function CompanyAdminTable({ companies, pageSize = 8 }: CompanyAdminTable
             {paginatedCompanies.map((company) => (
               <TableRow key={company._id} className="hover:bg-muted/30 transition-colors">
                 <TableCell className="font-medium text-foreground">{company.name}</TableCell>
-                <TableCell className="text-muted-foreground text-sm">{company.address}</TableCell>
+                <TableCell className="text-muted-foreground text-sm text-truncate">{company.address}</TableCell>
                 <TableCell className="text-right space-x-2">
                   <Button asChild variant="outline" size="sm" className="h-8">
                     <Link href={`/admin/companies/${company._id}/edit`}>Edit</Link>

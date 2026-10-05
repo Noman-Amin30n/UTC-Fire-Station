@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Flame, ShieldAlert, Building2, User } from "lucide-react";
+import { Flame, ShieldAlert, Building2 } from "lucide-react";
+import { SyncStatusBar } from "@/components/offline/SyncStatusBar";
 
 export function SiteHeader() {
   return (
@@ -30,6 +31,9 @@ export function SiteHeader() {
           </nav>
         </div>
         <div className="flex items-center gap-2">
+          {/* Offline sync status indicator */}
+          <SyncStatusBar />
+
           <Link
             href="/companies"
             className="flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground sm:hidden"

@@ -3,7 +3,15 @@ import { CompanyAccordionList } from "@/components/company/CompanyAccordionList"
 import { Building2 } from "lucide-react";
 
 export default async function CompaniesPage() {
-  const companies = await getAllCompanies();
+  // Gracefully handle database unavailability (e.g. during SW-cached offline access)
+  let companies: Awaited<ReturnType<typeof getAllCompanies>> = [];
+  try {
+    companies = await getAllCompanies();
+  } catch {
+    // When served from SW cache offline, this falls through to empty array.
+    // The client-side CompanyAccordionList will still render with offline data
+    // loaded separately.
+  }
 
   return (
     <main className="flex flex-col items-center flex-1 w-full pb-16">
@@ -16,7 +24,7 @@ export default async function CompaniesPage() {
             Registered Companies
           </h1>
           <p className="mt-3 text-muted-foreground max-w-xl text-balance">
-            Browse the complete directory of {companies.length} companies currently registered in the KEPZ emergency dispatch database.
+            Browse the complete directory of {companies.length > 0 ? companies.length : "all"} companies currently registered in the KEPZ emergency dispatch database.
           </p>
         </div>
       </div>

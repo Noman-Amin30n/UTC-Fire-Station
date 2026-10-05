@@ -1,23 +1,70 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useDebouncedCallback } from "use-debounce";
 import Link from "next/link";
 import type { CompanyDTO } from "@/types/company";
+import type { OfflineCompany } from "@/types/offline";
 import { Input } from "@/components/ui/input";
 import { CompanyResultCard } from "@/components/company/CompanyResultCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Loader2, MapPin } from "lucide-react";
+import { Search, Loader2, MapPin, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { normalizeSearchName } from "@/lib/utils";
+import { useOffline } from "@/components/offline/OfflineProvider";
 
 type SearchStatus = "idle" | "loading" | "done" | "error";
+
+/**
+ * Convert OfflineCompany → CompanyDTO for use with existing result components.
+ * The shapes are identical — this is just a type cast.
+ */
+function offlineToDTO(company: OfflineCompany): CompanyDTO {
+  return company as CompanyDTO;
+}
+
+/**
+ * Offline fuzzy search using Fuse.js against the locally-cached IndexedDB dataset.
+ * Only runs in the browser.
+ */
+async function searchOffline(query: string, limit = 5): Promise<CompanyDTO[]> {
+  const { getAllCompaniesOffline } = await import("@/lib/offline/database");
+  const Fuse = (await import("fuse.js")).default;
+
+  const companies = await getAllCompaniesOffline();
+  if (!companies.length) return [];
+
+  const fuse = new Fuse(companies, {
+    keys: ["searchName", "name"],
+    threshold: 0.35,
+    ignoreLocation: true,
+    minMatchCharLength: 2,
+  });
+
+  return fuse.search(query.trim(), { limit }).map((r) => offlineToDTO(r.item));
+}
+
+/**
+ * Fast offline search using the pre-computed searchName index in Dexie.
+ * Used as a quick fallback before Fuse.js fuzzy search kicks in.
+ */
+async function searchOfflineByIndex(query: string, limit = 5): Promise<CompanyDTO[]> {
+  const { searchCompaniesOffline } = await import("@/lib/offline/database");
+  const normalized = normalizeSearchName(query);
+  const results = await searchCompaniesOffline(normalized, limit);
+  return results.map(offlineToDTO);
+}
 
 export function CompanySearchInput({ totalCompanies }: { totalCompanies: number }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CompanyDTO[]>([]);
   const [status, setStatus] = useState<SearchStatus>("idle");
+  const [isOfflineSearch, setIsOfflineSearch] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { connection } = useOffline();
+
+  const isDeviceOffline = connection === "offline";
 
   const runSearch = useDebouncedCallback(async (value: string) => {
     if (value.trim().length < 2) {
@@ -26,15 +73,57 @@ export function CompanySearchInput({ totalCompanies }: { totalCompanies: number 
       return;
     }
     setStatus("loading");
+
+    // If device is offline, go directly to IndexedDB
+    if (!navigator.onLine) {
+      try {
+        // First try fast index search, fall back to Fuse
+        const indexResults = await searchOfflineByIndex(value, 5);
+        if (indexResults.length > 0) {
+          setResults(indexResults);
+          setStatus("done");
+          setIsOfflineSearch(true);
+          return;
+        }
+        // Fall back to fuzzy search
+        const fuzzyResults = await searchOffline(value, 5);
+        setResults(fuzzyResults);
+        setStatus("done");
+        setIsOfflineSearch(true);
+      } catch {
+        setResults([]);
+        setStatus("error");
+        setIsOfflineSearch(true);
+      }
+      return;
+    }
+
+    // Online: try network first, fall back to IndexedDB if it fails
     try {
+      setIsOfflineSearch(false);
       const res = await fetch(`/api/companies/search?q=${encodeURIComponent(value)}`);
       if (!res.ok) throw new Error("Search request failed");
       const data: { results: CompanyDTO[] } = await res.json();
       setResults(data.results);
       setStatus("done");
     } catch {
-      setResults([]);
-      setStatus("error");
+      // Network failed — fall back to offline search
+      try {
+        const offlineResults = await searchOfflineByIndex(value, 5);
+        if (offlineResults.length > 0) {
+          setResults(offlineResults);
+          setStatus("done");
+          setIsOfflineSearch(true);
+          return;
+        }
+        const fuzzyResults = await searchOffline(value, 5);
+        setResults(fuzzyResults);
+        setStatus("done");
+        setIsOfflineSearch(true);
+      } catch {
+        setResults([]);
+        setStatus("error");
+      }
     }
   }, 200);
 
@@ -70,6 +159,14 @@ export function CompanySearchInput({ totalCompanies }: { totalCompanies: number 
     return () => window.removeEventListener("keydown", handleGlobalKeydown);
   }, []);
 
+  // Re-run search when connection state changes (e.g., came back online)
+  useEffect(() => {
+    if (query.trim().length >= 2) {
+      runSearch(query);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connection]);
+
   const [best, ...others] = results;
 
   return (
@@ -92,11 +189,25 @@ export function CompanySearchInput({ totalCompanies }: { totalCompanies: number 
           aria-label="Company search"
         />
         <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-          <kbd className="hidden sm:inline-flex h-6 items-center gap-1 rounded border border-border bg-muted px-2 text-[10px] font-medium text-muted-foreground opacity-100">
-            <span className="text-xs">⌘</span> K
-          </kbd>
+          {isDeviceOffline ? (
+            <span title="Offline — searching local data">
+              <WifiOff className="h-4 w-4 text-amber-500" />
+            </span>
+          ) : (
+            <kbd className="hidden sm:inline-flex h-6 items-center gap-1 rounded border border-border bg-muted px-2 text-[10px] font-medium text-muted-foreground opacity-100">
+              <span className="text-xs">⌘</span> K
+            </kbd>
+          )}
         </div>
       </div>
+
+      {/* Offline indicator below search */}
+      {isOfflineSearch && status === "done" && results.length > 0 && (
+        <div className="flex items-center gap-1.5 text-xs text-amber-600">
+          <WifiOff className="h-3 w-3" />
+          <span>Showing locally cached results</span>
+        </div>
+      )}
 
       <div aria-live="polite" className="space-y-6 min-h-[300px]">
         {status === "loading" && (
@@ -151,6 +262,12 @@ export function CompanySearchInput({ totalCompanies }: { totalCompanies: number 
             <p className="mt-2 text-sm text-muted-foreground max-w-sm">
               Search by name, zone, or address for emergency response and dispatch details.
             </p>
+            {isDeviceOffline && (
+              <p className="mt-3 text-xs text-amber-600 flex items-center gap-1">
+                <WifiOff className="h-3 w-3" />
+                Offline — searching from locally stored data
+              </p>
+            )}
           </div>
         )}
 

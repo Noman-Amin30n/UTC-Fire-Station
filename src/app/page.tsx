@@ -3,7 +3,12 @@ import { CompanySearchInput } from "@/components/company/CompanySearchInput";
 import { ShieldAlert, Flame } from "lucide-react";
 
 export default async function Home() {
-  const totalCompanies = await getCompanyCount();
+  let totalCompanies = 0;
+  try {
+    totalCompanies = await getCompanyCount();
+  } catch (error) {
+    console.warn("Failed to fetch company count server-side (using default 0):", error);
+  }
 
   return (
     <main className="flex flex-col items-center flex-1 w-full">

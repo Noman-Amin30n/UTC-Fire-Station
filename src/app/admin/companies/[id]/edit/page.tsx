@@ -7,7 +7,12 @@ import { CompanyForm } from "@/components/company/CompanyForm";
 export default async function EditCompanyPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
   const { id } = await params;
-  const company = await getCompanyById(id);
+  let company = null;
+  try {
+    company = await getCompanyById(id);
+  } catch {
+    company = null;
+  }
   if (!company) notFound();
 
   return (

@@ -9,16 +9,13 @@ import { Button } from "@/components/ui/button";
 
 export function WhatsAppShareButton({ company }: { company: CompanyDTO }) {
   const [isSharing, setIsSharing] = useState(false);
-  const [origin, setOrigin] = useState("");
-
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
-    setOrigin(window.location.origin);
   }, []);
 
-  const message = formatCompanyMessage(company, origin);
+  const message = formatCompanyMessage(company);
 
   async function handleNativeShare() {
     setIsSharing(true);

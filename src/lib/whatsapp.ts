@@ -1,12 +1,26 @@
 import type { CompanyDTO } from "@/types/company";
 
-export function formatCompanyMessage(company: CompanyDTO, origin?: string): string {
-  // Use company ID so the URL stays short and WhatsApp can parse it as a clickable link.
-  // The map page fetches the embed URL server-side using this ID.
-  const mapLink =
-    company._id && company.googleMapsUrl && origin
-      ? `${origin}/map?id=${company._id}`
-      : company.googleMapsUrl;
+/**
+ * Converts a Google Maps embed URL (…/maps/embed?pb=…) to a regular
+ * shareable Google Maps URL (…/maps?pb=…) that opens directly in Google Maps.
+ */
+function embedUrlToDirectUrl(embedUrl: string): string {
+  try {
+    const url = new URL(embedUrl);
+    // Remove the "/embed" segment from the pathname if present.
+    url.pathname = url.pathname.replace(/\/embed\/?$/, "");
+    return url.toString();
+  } catch {
+    return embedUrl;
+  }
+}
+
+export function formatCompanyMessage(company: CompanyDTO): string {
+  // Convert the embed URL to a direct Google Maps link so recipients are
+  // taken straight to Google Maps instead of a local page.
+  const mapLink = company.googleMapsUrl
+    ? embedUrlToDirectUrl(company.googleMapsUrl)
+    : undefined;
 
   const lines = [
     `🚨 *${company.name}*`,

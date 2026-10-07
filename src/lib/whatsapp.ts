@@ -1,25 +1,32 @@
 import type { CompanyDTO } from "@/types/company";
 
 /**
- * Converts a Google Maps embed URL (…/maps/embed?pb=…) to a regular
- * shareable Google Maps URL (…/maps?pb=…) that opens directly in Google Maps.
+ * Builds a Google Maps Directions URL that routes from the user's current
+ * location (no explicit origin → Google Maps uses device GPS) to the
+ * company via the best driving route.
+ *
+ * Falls back to a plain search URL if no address is available.
  */
-function embedUrlToDirectUrl(embedUrl: string): string {
-  try {
-    const url = new URL(embedUrl);
-    // Remove the "/embed" segment from the pathname if present.
-    url.pathname = url.pathname.replace(/\/embed\/?$/, "");
-    return url.toString();
-  } catch {
-    return embedUrl;
-  }
+export function buildDirectionsUrl(company: CompanyDTO): string {
+  // Prefer using name + address as the destination so Google can pin it
+  // precisely on the map. Omitting `origin` makes Google Maps prompt the
+  // user's device for its current location automatically.
+  const destination = [company.name, company.address].filter(Boolean).join(", ");
+
+  const params = new URLSearchParams({
+    api: "1",
+    destination,
+    travelmode: "driving",
+  });
+
+  return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
 export function formatCompanyMessage(company: CompanyDTO): string {
-  // Convert the embed URL to a direct Google Maps link so recipients are
-  // taken straight to Google Maps instead of a local page.
-  const mapLink = company.googleMapsUrl
-    ? embedUrlToDirectUrl(company.googleMapsUrl)
+  // Build a turn-by-turn directions link so the recipient can navigate
+  // straight to the company from their current location.
+  const directionsLink = company.address || company.googleMapsUrl
+    ? buildDirectionsUrl(company)
     : undefined;
 
   const lines = [
@@ -27,7 +34,7 @@ export function formatCompanyMessage(company: CompanyDTO): string {
     company.address,
     company.phone ? `📞 Phone: ${company.phone}` : null,
     company.notes ? `📝 Notes: ${company.notes}` : null,
-    mapLink ? `📍 Map:\n${mapLink}` : null,
+    directionsLink ? `📍 Directions:\n${directionsLink}` : null,
   ].filter(Boolean);
 
   return lines.join("\n\n");

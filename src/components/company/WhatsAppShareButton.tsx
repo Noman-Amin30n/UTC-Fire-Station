@@ -4,7 +4,12 @@ import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { MessageCircle, Copy, MapPin } from "lucide-react";
 import type { CompanyDTO } from "@/types/company";
-import { formatCompanyMessage, buildWhatsAppUrl, type UserCoords } from "@/lib/whatsapp";
+import {
+  formatCompanyMessage,
+  buildWhatsAppUrl,
+  buildDirectionsUrl,
+  type UserCoords,
+} from "@/lib/whatsapp";
 import { Button } from "@/components/ui/button";
 
 export function WhatsAppShareButton({ company }: { company: CompanyDTO }) {
@@ -70,7 +75,10 @@ export function WhatsAppShareButton({ company }: { company: CompanyDTO }) {
   }
 
   function handleOpenMap() {
-    if (company.googleMapsUrl) {
+    const directionsUrl = buildDirectionsUrl(company, userCoordsRef.current);
+    if (directionsUrl) {
+      window.open(directionsUrl, "_blank", "noopener,noreferrer");
+    } else if (company.googleMapsUrl) {
       window.open(company.googleMapsUrl, "_blank", "noopener,noreferrer");
     }
   }

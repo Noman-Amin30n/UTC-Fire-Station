@@ -15,6 +15,8 @@ export function CompanyResultCard({ company }: { company: CompanyDTO }) {
         {company.googleMapsUrl ? (
           <EmbeddedMap
             googleMapsUrl={company.googleMapsUrl}
+            companyName={company.name}
+            address={company.address}
             title={`Map to ${company.name}`}
           />
         ) : (

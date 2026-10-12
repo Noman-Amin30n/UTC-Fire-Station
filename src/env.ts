@@ -8,6 +8,7 @@ const envSchema = z.object({
   ADMIN_USERNAME: z.string().min(1),
   ADMIN_PASSWORD_HASH: z.string().min(1),
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET must be at least 32 characters"),
+  NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

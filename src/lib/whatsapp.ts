@@ -1,4 +1,5 @@
 import type { CompanyDTO } from "@/types/company";
+import { getCompanyCoordinates } from "@/lib/maps";
 
 export interface UserCoords {
   lat: number;
@@ -8,15 +9,23 @@ export interface UserCoords {
 /**
  * Builds a Google Maps Directions URL that routes to the company.
  *
- * When `userCoords` are provided (fetched via the Geolocation API), they are
- * used as the precise `origin` so the link opens turn-by-turn directions from
- * the user's exact GPS position.
+ * Destination:
+ * - Uses the exact latitude and longitude points extracted from the company's
+ *   stored Google Maps URL (or address) to guarantee 100% precision.
+ * - Falls back to company name + address if exact coordinates cannot be extracted.
  *
- * Without coords the `origin` param is omitted, which causes Google Maps to
- * prompt the recipient's device for its current location automatically.
+ * Origin (Starting point):
+ * - When `userCoords` are provided (from Geolocation API), they are embedded as
+ *   the exact starting GPS point.
+ * - Without `userCoords`, the origin param is omitted so Google Maps prompts
+ *   the device for its current location automatically.
  */
 export function buildDirectionsUrl(company: CompanyDTO, userCoords?: UserCoords): string {
-  const destination = [company.name, company.address].filter(Boolean).join(", ");
+  const coords = getCompanyCoordinates(company);
+
+  const destination = coords
+    ? `${coords.lat},${coords.lng}`
+    : [company.name, company.address].filter(Boolean).join(", ");
 
   const params = new URLSearchParams({
     api: "1",

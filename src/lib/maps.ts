@@ -1,49 +1,12 @@
 /**
- * Extracts the destination coordinates or query string from a Google Maps URL
- * so we can reuse the exact same destination while swapping in the user's
- * current location as the origin.
- *
- * Handles the three most common URL formats stored by admins:
- *
- * 1. Embed URL  — https://www.google.com/maps/embed?pb=!1m18!...!2d<lng>!3d<lat>!...
- * 2. Place URL  — https://www.google.com/maps/place/NAME/@<lat>,<lng>,<zoom>z/...
- * 3. Search URL — https://www.google.com/maps/search/?api=1&query=<q>
- *                 https://maps.google.com/maps?q=<q>&output=embed
+ * Maps utility for extracting exact latitude/longitude coordinates from
+ * various Google Maps URL formats (embed, place, search, DMS, dropped pins)
+ * and building navigation/embed directions with the user's location as starting point.
  */
 
-// --- Format 1: Extract from pb= parameter ---
-// The pb string looks like:
-//   !1m18!1m12!1m3!1d...!2d<lng>!3d<lat>!3m2!...
-// The first occurrence of !2d<lng>!3d<lat> is the destination.
-function extractCoordsFromPb(pb: string): { lat: number; lng: number } | null {
-  const match = pb.match(/!2d(-?\d+\.\d+)!3d(-?\d+\.\d+)/);
-  if (match) {
-    const lng = parseFloat(match[1]);
-    const lat = parseFloat(match[2]);
-    if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
-  }
-  return null;
-}
-
-// --- Format 2: Extract from /place/NAME/@lat,lng or any /@lat,lng pattern ---
-function extractCoordsFromAtNotation(url: string): { lat: number; lng: number } | null {
-  const match = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-  if (match) {
-    const lat = parseFloat(match[1]);
-    const lng = parseFloat(match[2]);
-    if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
-  }
-  return null;
-}
-
-// --- Format 3: Extract q= or query= param ---
-function extractQueryParam(url: string): string | null {
-  try {
-    const u = new URL(url);
-    return u.searchParams.get("q") ?? u.searchParams.get("query") ?? null;
-  } catch {
-    return null;
-  }
+export interface LatLng {
+  lat: number;
+  lng: number;
 }
 
 export type DestinationInfo =
@@ -51,48 +14,215 @@ export type DestinationInfo =
   | { type: "query"; q: string };
 
 /**
- * Parses a stored Google Maps URL and returns the best representation of its
- * destination — either as precise coordinates (preferred) or a text query.
- * Returns null if the destination cannot be determined.
+ * Strips iframe markup if pasted by user, returning the raw map URL.
  */
-export function extractDestinationFromMapsUrl(url: string): DestinationInfo | null {
-  try {
-    const u = new URL(url);
+export function cleanMapUrl(input?: string): string {
+  if (!input || typeof input !== "string") return "";
+  const str = input.trim();
+  const iframeMatch = str.match(/src=["']([^"']+)["']/i);
+  return iframeMatch ? iframeMatch[1] : str;
+}
 
-    // Format 1: embed?pb= (most common — Google Maps "Embed a map" flow)
-    const pb = u.searchParams.get("pb");
-    if (pb) {
-      const coords = extractCoordsFromPb(pb);
-      if (coords) return { type: "coords", ...coords };
+/**
+ * Parses Degrees-Minutes-Seconds (DMS) string into decimal coordinates.
+ * Example: 24°51'18.0"N 67°12'18.0"E -> { lat: 24.855, lng: 67.205 }
+ */
+export function parseDms(dmsStr: string): LatLng | null {
+  const dms = dmsStr.match(
+    /(\d+)°\s*(\d+)'\s*([\d.]+)"\s*([NS])\s+(\d+)°\s*(\d+)'\s*([\d.]+)"\s*([EW])/i,
+  );
+  if (dms) {
+    let lat = Number(dms[1]) + Number(dms[2]) / 60 + Number(dms[3]) / 3600;
+    if (dms[4].toUpperCase() === "S") lat = -lat;
+    let lng = Number(dms[5]) + Number(dms[6]) / 60 + Number(dms[7]) / 3600;
+    if (dms[8].toUpperCase() === "W") lng = -lng;
+    return {
+      lat: Number(lat.toFixed(6)),
+      lng: Number(lng.toFixed(6)),
+    };
+  }
+  return null;
+}
+
+/**
+ * Validates whether latitude and longitude are within standard geographical bounds.
+ */
+function isValidLatLng(lat: number, lng: number): boolean {
+  return (
+    !isNaN(lat) &&
+    !isNaN(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  );
+}
+
+/**
+ * Extracts exact latitude and longitude from any Google Maps URL or string.
+ *
+ * Handles:
+ * 1. Embed URLs (`pb=`):
+ *    - Marker pin coordinates: `!3d<lat>!4d<lng>`
+ *    - Base64 DMS label: `!2z<base64>` (e.g. 24°51'18.0"N 67°12'18.0"E)
+ *    - Viewport center: `!2d<lng>!3d<lat>`
+ * 2. Place and search URLs:
+ *    - `@<lat>,<lng>`
+ *    - `/place/<lat>,<lng>` or `/dir/<lat>,<lng>`
+ *    - Query params: `q=`, `query=`, `destination=`, `daddr=`, `ll=`, `loc:`
+ * 3. Text containing DMS coordinates or decimal coordinate pairs.
+ */
+export function extractCoordinates(input?: string): LatLng | null {
+  if (!input || typeof input !== "string") return null;
+
+  const target = cleanMapUrl(input);
+
+  // Decode URL if encoded
+  let decoded = target;
+  try {
+    decoded = decodeURIComponent(target);
+  } catch {
+    // Keep decoded as target if decoding fails
+  }
+
+  // 1. Check for pb= parameter inside embed URLs
+  const pbMatch = decoded.match(/pb=([^&]+)/);
+  if (pbMatch) {
+    const pb = pbMatch[1];
+
+    // 1a. Marker pin: !3d<lat>!4d<lng>
+    const markerMatch = pb.match(
+      /!3d(-?\d+(?:\.\d+)?)(?:![^!]+)*!4d(-?\d+(?:\.\d+)?)/,
+    );
+    if (markerMatch) {
+      const lat = parseFloat(markerMatch[1]);
+      const lng = parseFloat(markerMatch[2]);
+      if (isValidLatLng(lat, lng)) return { lat, lng };
     }
 
-    // Format 2: /place/.../@lat,lng or any /@lat,lng in path/query
-    const coordsFromAt = extractCoordsFromAtNotation(url);
-    if (coordsFromAt) return { type: "coords", ...coordsFromAt };
+    // 1b. Base64 DMS label in !2z (common for dropped pins)
+    const b64Match = pb.match(/!2z([A-Za-z0-9+/=]+)/);
+    if (b64Match) {
+      try {
+        let b64Text = "";
+        if (typeof window === "undefined") {
+          b64Text = Buffer.from(b64Match[1], "base64").toString("utf8");
+        } else {
+          b64Text = atob(b64Match[1]);
+        }
+        const coords = parseDms(b64Text);
+        if (coords && isValidLatLng(coords.lat, coords.lng)) return coords;
+      } catch {
+        // Continue to other patterns if base64 decode fails
+      }
+    }
 
-    // Format 3: q= or query= param
-    const q = extractQueryParam(url);
-    if (q) return { type: "query", q };
-
-    return null;
-  } catch {
-    return null;
+    // 1c. Viewport / map center: !2d<lng>!3d<lat>
+    const vpMatch = pb.match(
+      /!2d(-?\d+(?:\.\d+)?)(?:![^!]+)*!3d(-?\d+(?:\.\d+)?)/,
+    );
+    if (vpMatch) {
+      const lng = parseFloat(vpMatch[1]);
+      const lat = parseFloat(vpMatch[2]);
+      if (isValidLatLng(lat, lng)) return { lat, lng };
+    }
   }
+
+  // 2. Check for @<lat>,<lng> pattern
+  const atMatch = decoded.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (atMatch) {
+    const lat = parseFloat(atMatch[1]);
+    const lng = parseFloat(atMatch[2]);
+    if (isValidLatLng(lat, lng)) return { lat, lng };
+  }
+
+  // 3. Check for DMS directly in string
+  const directDms = parseDms(decoded);
+  if (directDms && isValidLatLng(directDms.lat, directDms.lng)) {
+    return directDms;
+  }
+
+  // 4. Check for query parameters or path formats (q, query, destination, daddr, ll, loc:, /place/)
+  const paramCoords = decoded.match(
+    /(?:[?&](?:q|query|destination|daddr|ll)=|loc:|\/place\/|\/dir\/)(-?\d+\.\d+)(?:,|%2C|\+)(-?\d+\.\d+)/i,
+  );
+  if (paramCoords) {
+    const lat = parseFloat(paramCoords[1]);
+    const lng = parseFloat(paramCoords[2]);
+    if (isValidLatLng(lat, lng)) return { lat, lng };
+  }
+
+  // 5. Check for standalone lat,lng pair anywhere in string
+  const standaloneMatch = decoded.match(
+    /(-?\d{1,2}\.\d{3,})(?:\s*,\s*|\s+)(-?\d{1,3}\.\d{3,})/,
+  );
+  if (standaloneMatch) {
+    const lat = parseFloat(standaloneMatch[1]);
+    const lng = parseFloat(standaloneMatch[2]);
+    if (isValidLatLng(lat, lng)) return { lat, lng };
+  }
+
+  return null;
+}
+
+/**
+ * Gets exact destination coordinates for a company.
+ * Checks googleMapsUrl first, then falls back to address.
+ */
+export function getCompanyCoordinates(company: {
+  googleMapsUrl?: string;
+  address?: string;
+}): LatLng | null {
+  if (company.googleMapsUrl) {
+    const coords = extractCoordinates(company.googleMapsUrl);
+    if (coords) return coords;
+  }
+  if (company.address) {
+    const coords = extractCoordinates(company.address);
+    if (coords) return coords;
+  }
+  return null;
+}
+
+/**
+ * Extracts either exact coordinates or a text query destination from a Google Maps URL.
+ */
+export function extractDestinationFromMapsUrl(url: string): DestinationInfo | null {
+  const coords = extractCoordinates(url);
+  if (coords) {
+    return { type: "coords", ...coords };
+  }
+
+  try {
+    const u = new URL(cleanMapUrl(url));
+    const q = u.searchParams.get("q") ?? u.searchParams.get("query");
+    if (q) return { type: "query", q };
+  } catch {
+    // Ignore invalid URL
+  }
+
+  return null;
 }
 
 /**
  * Builds an embeddable Google Maps directions iframe URL using
- * `maps.google.com/maps` (no API key required).
+ * `maps.google.com/maps` with no API key requirement.
  *
- * @param origin - user's current lat/lng
- * @param dest   - destination parsed from the stored URL
+ * @param origin - user's current GPS lat/lng
+ * @param dest   - exact lat/lng coordinates or text query destination
  */
 export function buildDirectionsEmbedUrl(
-  origin: { lat: number; lng: number },
-  dest: DestinationInfo,
+  origin: LatLng,
+  dest: DestinationInfo | LatLng | string,
 ): string {
-  const daddrValue =
-    dest.type === "coords" ? `${dest.lat},${dest.lng}` : dest.q;
+  let daddrValue = "";
+  if (typeof dest === "string") {
+    daddrValue = dest;
+  } else if ("type" in dest) {
+    daddrValue = dest.type === "coords" ? `${dest.lat},${dest.lng}` : dest.q;
+  } else {
+    daddrValue = `${dest.lat},${dest.lng}`;
+  }
 
   const params = new URLSearchParams({
     saddr: `${origin.lat},${origin.lng}`,
@@ -102,3 +232,4 @@ export function buildDirectionsEmbedUrl(
 
   return `https://maps.google.com/maps?${params.toString()}`;
 }
+

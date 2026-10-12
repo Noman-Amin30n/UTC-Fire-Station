@@ -1,32 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Loader2, MapPin } from "lucide-react";
+import {
+  extractDestinationFromMapsUrl,
+  buildDirectionsEmbedUrl,
+} from "@/lib/maps";
 
 interface EmbeddedMapProps {
-  /** The Google Maps embed/share URL stored in the database — used to extract
-   *  the destination for the directions embed, and as the fallback if
-   *  geolocation is unavailable. */
+  /** The Google Maps embed/share URL stored in the database. Used both as a
+   *  fallback iframe src and as the source from which we extract the precise
+   *  destination for the directions embed. */
   googleMapsUrl: string;
-  /** Plain-text destination address / company name used to build the
-   *  directions embed URL when geolocation succeeds. */
-  destination?: string;
   title?: string;
-}
-
-/**
- * Builds a `maps.google.com` embed URL that shows turn-by-turn directions
- * from `origin` (lat,lng string or address) to `destination`.
- *
- * This endpoint does NOT require an API key and works reliably in iframes.
- */
-function buildDirectionsEmbedUrl(origin: string, destination: string): string {
-  const params = new URLSearchParams({
-    saddr: origin,
-    daddr: destination,
-    output: "embed",
-  });
-  return `https://maps.google.com/maps?${params.toString()}`;
 }
 
 type GeoState =
@@ -35,12 +21,15 @@ type GeoState =
   | { status: "granted"; lat: number; lng: number }
   | { status: "denied" };
 
-export function EmbeddedMap({
-  googleMapsUrl,
-  destination,
-  title = "Google Maps",
-}: EmbeddedMapProps) {
+export function EmbeddedMap({ googleMapsUrl, title = "Google Maps" }: EmbeddedMapProps) {
   const [geo, setGeo] = useState<GeoState>({ status: "idle" });
+
+  // Parse the destination from the stored URL once — this is pure computation,
+  // so useMemo keeps it off the render critical path.
+  const destination = useMemo(
+    () => extractDestinationFromMapsUrl(googleMapsUrl),
+    [googleMapsUrl],
+  );
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
@@ -59,27 +48,27 @@ export function EmbeddedMap({
         });
       },
       () => {
+        // Permission denied or unavailable — fall back to the stored URL.
         setGeo({ status: "denied" });
       },
       { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
     );
   }, []);
 
-  // Determine the iframe src to render
-  const iframeSrc = (() => {
-    if (geo.status === "granted" && destination) {
-      return buildDirectionsEmbedUrl(
-        `${geo.lat},${geo.lng}`,
-        destination,
-      );
-    }
-    // Fallback: show the stored static map URL
-    return googleMapsUrl;
-  })();
+  // Determine which iframe src to render:
+  // • If we have user GPS AND could parse a destination from the stored URL
+  //   → show directions from user location to the exact original destination.
+  // • Otherwise → show the original stored embed URL unchanged.
+  const iframeSrc =
+    geo.status === "granted" && destination
+      ? buildDirectionsEmbedUrl({ lat: geo.lat, lng: geo.lng }, destination)
+      : googleMapsUrl;
+
+  const showMap = geo.status !== "loading";
 
   return (
     <div className="relative overflow-hidden rounded-lg border border-border shadow-inner bg-muted aspect-video w-full">
-      {/* Loading overlay while waiting for geolocation */}
+      {/* Loading overlay while waiting for geolocation permission */}
       {geo.status === "loading" && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-muted/90 backdrop-blur-sm">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -87,15 +76,15 @@ export function EmbeddedMap({
         </div>
       )}
 
-      {/* Soft notice when location was denied — map still shows, just no directions */}
+      {/* Hint banner when location was denied but map still shows */}
       {geo.status === "denied" && destination && (
         <div className="absolute bottom-0 left-0 right-0 z-10 flex items-center gap-1.5 bg-background/80 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-sm">
           <MapPin className="h-3 w-3 shrink-0" />
-          Enable location for turn-by-turn directions
+          Enable location for turn-by-turn directions from your position
         </div>
       )}
 
-      {(geo.status === "granted" || geo.status === "denied" || geo.status === "idle") && (
+      {showMap && (
         <iframe
           src={iframeSrc}
           title={title}
@@ -110,3 +99,4 @@ export function EmbeddedMap({
     </div>
   );
 }
+

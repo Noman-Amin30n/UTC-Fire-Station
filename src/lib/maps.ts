@@ -90,7 +90,34 @@ export function extractCoordinates(input?: string): LatLng | null {
   if (pbMatch) {
     const pb = pbMatch[1];
 
-    // 1a. Marker pin: !3d<lat>!4d<lng>
+    // Priority 1: In directions embed URLs (!4m...), extract the destination waypoint.
+    // The destination waypoint starts with !2s<name> and contains !1d<lat>!2d<lng> or is the last waypoint in the route.
+    if (pb.includes("!4m")) {
+      // 1a. Destination block with place label: !2s<name>...!1d<lat>!2d<lng>
+      const destBlockMatch = decoded.match(
+        /!2s([^!]+)(?:![^!]+)*?!1d(-?\d+(?:\.\d+)?)[^!]*!2d(-?\d+(?:\.\d+)?)/,
+      );
+      if (destBlockMatch) {
+        const lat = parseFloat(destBlockMatch[2]);
+        const lng = parseFloat(destBlockMatch[3]);
+        if (isValidLatLng(lat, lng)) return { lat, lng };
+      }
+
+      // 1b. Fallback in directions: take the LAST waypoint in !4m route
+      const wpRegex = /!1d(-?\d+(?:\.\d+)?)[^!]*!2d(-?\d+(?:\.\d+)?)/g;
+      let m: RegExpExecArray | null;
+      let lastWp: LatLng | null = null;
+      while ((m = wpRegex.exec(pb)) !== null) {
+        const lat = parseFloat(m[1]);
+        const lng = parseFloat(m[2]);
+        if (isValidLatLng(lat, lng)) {
+          lastWp = { lat, lng };
+        }
+      }
+      if (lastWp) return lastWp;
+    }
+
+    // Priority 2: Marker pin: !3d<lat>!4d<lng>
     const markerMatch = pb.match(
       /!3d(-?\d+(?:\.\d+)?)(?:![^!]+)*!4d(-?\d+(?:\.\d+)?)/,
     );
@@ -100,7 +127,7 @@ export function extractCoordinates(input?: string): LatLng | null {
       if (isValidLatLng(lat, lng)) return { lat, lng };
     }
 
-    // 1b. Base64 DMS label in !2z (common for dropped pins)
+    // Priority 3: Base64 DMS label in !2z (common for dropped pins)
     const b64Match = pb.match(/!2z([A-Za-z0-9+/=]+)/);
     if (b64Match) {
       try {
@@ -117,14 +144,16 @@ export function extractCoordinates(input?: string): LatLng | null {
       }
     }
 
-    // 1c. Viewport / map center: !2d<lng>!3d<lat>
-    const vpMatch = pb.match(
-      /!2d(-?\d+(?:\.\d+)?)(?:![^!]+)*!3d(-?\d+(?:\.\d+)?)/,
-    );
-    if (vpMatch) {
-      const lng = parseFloat(vpMatch[1]);
-      const lat = parseFloat(vpMatch[2]);
-      if (isValidLatLng(lat, lng)) return { lat, lng };
+    // Priority 4: Viewport / map center: !2d<lng>!3d<lat> (ONLY if not a directions embed)
+    if (!pb.includes("!4m")) {
+      const vpMatch = pb.match(
+        /!2d(-?\d+(?:\.\d+)?)(?:![^!]+)*!3d(-?\d+(?:\.\d+)?)/,
+      );
+      if (vpMatch) {
+        const lng = parseFloat(vpMatch[1]);
+        const lat = parseFloat(vpMatch[2]);
+        if (isValidLatLng(lat, lng)) return { lat, lng };
+      }
     }
   }
 

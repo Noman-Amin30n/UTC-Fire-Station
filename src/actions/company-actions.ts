@@ -12,6 +12,7 @@ import {
   deleteCompanyImage,
   validateImageFile,
 } from "@/lib/cloudinary";
+import { cleanMapUrl } from "@/lib/maps";
 
 export type CompanyActionState = {
   error?: string;
@@ -19,6 +20,7 @@ export type CompanyActionState = {
 };
 
 function parseCompanyFormData(formData: FormData) {
+  const rawMapsUrl = formData.get("googleMapsUrl");
   return companyFormSchema.safeParse({
     name: formData.get("name"),
     address: formData.get("address"),
@@ -27,7 +29,7 @@ function parseCompanyFormData(formData: FormData) {
     contactPerson: formData.get("contactPerson"),
     companyCode: formData.get("companyCode"),
     notes: formData.get("notes"),
-    googleMapsUrl: formData.get("googleMapsUrl"),
+    googleMapsUrl: typeof rawMapsUrl === "string" ? cleanMapUrl(rawMapsUrl) : rawMapsUrl,
   });
 }
 

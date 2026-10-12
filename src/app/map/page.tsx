@@ -3,6 +3,7 @@ import Link from "next/link";
 import { MapPin, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getCompanyById } from "@/lib/companies";
+import { EmbeddedMap } from "@/components/company/EmbeddedMap";
 
 type Props = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -85,16 +86,12 @@ export default async function MapPage({ searchParams }: Props) {
       {/* Map */}
       <div className="rounded-xl border border-border/50 bg-card shadow-sm overflow-hidden">
         {mapURL ? (
-          <div className="relative w-full" style={{ paddingBottom: "56.25%" /* 16:9 */ }}>
-            <iframe
-              src={mapURL}
-              className="absolute inset-0 w-full h-full border-0"
-              allowFullScreen
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-              title={company ? `Map to ${company.name}` : "Google Maps Location"}
-            />
-          </div>
+          <EmbeddedMap
+            googleMapsUrl={mapURL}
+            companyName={company?.name}
+            address={company?.address}
+            title={company ? `Map to ${company.name}` : "Google Maps Location"}
+          />
         ) : (
           <div className="flex flex-col items-center justify-center aspect-video bg-muted/50 p-8 text-center space-y-4">
             <MapPin className="h-12 w-12 text-muted-foreground opacity-50" />

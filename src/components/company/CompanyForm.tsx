@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import Image from "next/image";
 import { companyFormSchema, type CompanyFormValues } from "@/schemas/company.schema";
 import type { CompanyActionState } from "@/actions/company-actions";
+import { cleanMapUrl } from "@/lib/maps";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -130,9 +131,11 @@ export function CompanyForm({ action, defaultValues, existingImageUrl, submitLab
         </Label>
         <Input
           id="googleMapsUrl"
-          type="url"
-          placeholder="https://www.google.com/maps/embed?pb=..."
-          {...register("googleMapsUrl")}
+          type="text"
+          placeholder="https://www.google.com/maps/embed?pb=... or <iframe src=...> code"
+          {...register("googleMapsUrl", {
+            setValueAs: (v) => (typeof v === "string" ? cleanMapUrl(v) : v),
+          })}
         />
         {errors.googleMapsUrl && (
           <p className="text-sm text-destructive">{errors.googleMapsUrl.message}</p>

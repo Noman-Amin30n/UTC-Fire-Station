@@ -1,27 +1,50 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { MessageCircle, Copy, MapPin } from "lucide-react";
 import type { CompanyDTO } from "@/types/company";
-import { formatCompanyMessage, buildWhatsAppUrl } from "@/lib/whatsapp";
+import { formatCompanyMessage, buildWhatsAppUrl, type UserCoords } from "@/lib/whatsapp";
 import { Button } from "@/components/ui/button";
 
 export function WhatsAppShareButton({ company }: { company: CompanyDTO }) {
   const [isSharing, setIsSharing] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const userCoordsRef = useRef<UserCoords | undefined>(undefined);
 
   useEffect(() => {
     setIsMounted(true);
+
+    // Silently request geolocation so we can embed accurate coordinates into
+    // the directions link. We store the result in a ref (not state) to avoid
+    // an extra re-render — we only need it at share-time.
+    if (typeof navigator !== "undefined" && "geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          userCoordsRef.current = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          };
+        },
+        () => {
+          // Permission denied or unavailable — fallback gracefully; the
+          // directions link will still work, Google will prompt for location.
+          userCoordsRef.current = undefined;
+        },
+        { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
+      );
+    }
   }, []);
 
-  const message = formatCompanyMessage(company);
+  function getMessage() {
+    return formatCompanyMessage(company, userCoordsRef.current);
+  }
 
   async function handleNativeShare() {
     setIsSharing(true);
     try {
       if (navigator.share) {
-        await navigator.share({ text: message });
+        await navigator.share({ text: getMessage() });
       } else {
         throw new Error("Web Share API unavailable");
       }
@@ -35,7 +58,7 @@ export function WhatsAppShareButton({ company }: { company: CompanyDTO }) {
 
   async function handleCopyDetails() {
     try {
-      await navigator.clipboard.writeText(message);
+      await navigator.clipboard.writeText(getMessage());
       toast.success("Details copied — paste into WhatsApp");
     } catch {
       toast.error("Couldn't copy — clipboard access denied");
@@ -43,7 +66,7 @@ export function WhatsAppShareButton({ company }: { company: CompanyDTO }) {
   }
 
   function handleOpenWhatsApp() {
-    window.open(buildWhatsAppUrl(message), "_blank", "noopener,noreferrer");
+    window.open(buildWhatsAppUrl(getMessage()), "_blank", "noopener,noreferrer");
   }
 
   function handleOpenMap() {

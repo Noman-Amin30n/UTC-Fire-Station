@@ -193,6 +193,7 @@ export function CompanyAccordionList({ companies }: { companies: CompanyDTO[] })
                     {company.googleMapsUrl ? (
                       <EmbeddedMap
                         googleMapsUrl={company.googleMapsUrl}
+                        destination={[company.name, company.address].filter(Boolean).join(", ")}
                         title={`Map to ${company.name}`}
                       />
                     ) : (
